@@ -1,6 +1,6 @@
 package tcpclient;
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
 
 public class TCPClient {
     private boolean shutdown;
@@ -13,62 +13,59 @@ public class TCPClient {
         this.limit = limit;
     }
 
-    // Ansluter till en server på hostname, port och skickar data till servern
+    // ansluter till en server på hostname, port
     public byte[] askServer(String hostname, int port, byte[] bytesToServer) throws IOException {
-        Socket socket = new Socket(hostname, port); // Vi skapar en socket för att ansluta till servern
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(); // Kan skriva data till en byte-array
-        InputStream inputStream = socket.getInputStream(); // Kan läsa data från servern
-        OutputStream outputStream = socket.getOutputStream(); // Kan skicka data till servern
+        Socket socket = null;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try {
+            socket = new Socket(hostname, port); // vi skapar en socket för att ansluta till servern
 
-        if (bytesToServer != null) {
-            outputStream.write(bytesToServer); // Skicka data till servern
-            outputStream.flush(); // Säkerställa att allt skickades
-        }
+            /* Skapar en inputstream för att läsa svaret från servern */
+            InputStream in = socket.getInputStream();
+            /* Vi skapar en OutputStream för att skicka data */
+            OutputStream out = socket.getOutputStream();
 
-        if (shutdown) {
-            socket.shutdownOutput(); // Stänger anslutningen i utgående riktning om shutdown är true
-        }
-
-        byte[] buffer = new byte[1024]; // Lagrar datan som kommer från servern i en byte-array
-        int bytesRead;
-        long startTime = System.currentTimeMillis();
-
-        while (true) {
-            long elapsedTime = System.currentTimeMillis() - startTime;
-
-            if (timeout != null && elapsedTime > timeout) {
-                System.out.println("En timeout har brytits ut! Ingen respons inom " + timeout + " ms.");
-                break; // Timeout uppnådd, avsluta
+            if (timeout != null) {
+                socket.setSoTimeout(timeout);
             }
 
-            // Kontrollera om det finns data att läsa
-            if (inputStream.available() > 0) {
-                bytesRead = inputStream.read(buffer);
-                if (bytesRead == -1) break; // Anslutningen stängdes av servern
+            out.write(bytesToServer); // Skicka data till servern
+            out.flush(); // säkerställa att allt skickades
 
-                byteArrayOutputStream.write(buffer, 0, bytesRead);
-                startTime = System.currentTimeMillis(); // Uppdatera starttiden vid mottagning av data
+            if (shutdown) {
+                socket.shutdownOutput();
+            }
 
-                if (limit != null && byteArrayOutputStream.size() >= limit) {
-                    break; // Avsluta om vi har tagit emot tillräckligt med data
-                }
-            } else {
-                if (timeout != null) {
-                    try {
-                        Thread.sleep(10); // Kortare väntetid för att reagera snabbare på timeout
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
+            byte[] tempBuff = new byte[2048]; // tillfällig buffert
+            int bytesRead;
+            int totalBytesRead = 0;
+            while ((bytesRead = in.read(tempBuff)) != -1) {
+                if (limit != null && totalBytesRead + bytesRead > limit) {
+                    buffer.write(tempBuff, 0, limit - totalBytesRead);
+                    break;
+                } else {
+                    buffer.write(tempBuff, 0, bytesRead);
+                    totalBytesRead += bytesRead;
                 }
             }
-        }
 
-        socket.close(); // Stänger anslutningen
-        return byteArrayOutputStream.toByteArray(); // Returnerar svaret från servern
+            /* stänger anslutningen och returnerar svaret */
+            in.close();
+            out.close();
+            socket.close();
+
+        } catch (IOException e) {
+            System.err.println("IOException: " + e.getMessage());
+            throw e;
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+        }
+        return buffer.toByteArray();
     }
 
-    // Ansluter till servern som innan, men utan att skicka data till servern
+    // ansluter till servern som innan, men utan att skicka data till servern
     public byte[] askServer(String hostname, int port) throws IOException {
         return askServer(hostname, port, new byte[0]);
     }
