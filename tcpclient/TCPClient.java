@@ -35,36 +35,34 @@ public class TCPClient {
 
         while (true) {
             long elapsedTime = System.currentTimeMillis() - startTime;
-        
-            if (timeout != null && elapsedTime > timeout) { 
-                System.out.println("En timeout har brytits ut! Ingen respons inom " + timeout + " ms."); 
+
+            if (timeout != null && elapsedTime > timeout) {
+                System.out.println("En timeout har brytits ut! Ingen respons inom " + timeout + " ms.");
                 break; // Timeout uppnådd, avsluta
             }
-            
-        
+
             // Kontrollera om det finns data att läsa
-            if (inputStream.available() > 0) {  
+            if (inputStream.available() > 0) {
                 bytesRead = inputStream.read(buffer);
-                if (bytesRead == -1) break;  // Anslutningen stängdes av servern
-        
+                if (bytesRead == -1) break; // Anslutningen stängdes av servern
+
                 byteArrayOutputStream.write(buffer, 0, bytesRead);
                 startTime = System.currentTimeMillis(); // Uppdatera starttiden vid mottagning av data
-        
+
                 if (limit != null && byteArrayOutputStream.size() >= limit) {
-                    break;  // Avsluta om vi har tagit emot tillräckligt med data
+                    break; // Avsluta om vi har tagit emot tillräckligt med data
                 }
             } else {
-                try {
-                    Thread.sleep(10); // Kortare väntetid för att reagera snabbare på timeout
-                } catch (InterruptedException e) {
-                    
-                    Thread.currentThread().interrupt();
-                    break;
-
+                if (timeout != null) {
+                    try {
+                        Thread.sleep(10); // Kortare väntetid för att reagera snabbare på timeout
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             }
         }
-        
 
         socket.close(); // Stänger anslutningen
         return byteArrayOutputStream.toByteArray(); // Returnerar svaret från servern
